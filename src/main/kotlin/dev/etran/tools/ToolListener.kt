@@ -2,6 +2,7 @@ package dev.etran.tools
 
 import dev.etran.EasySetupPlugin
 import dev.etran.Msg
+import dev.etran.bw.ActionQueue
 import dev.etran.bw.ElementPlacer
 import dev.etran.compat.BedCompat
 import dev.etran.gui.FacingControl
@@ -123,7 +124,7 @@ class ToolListener(private val plugin: EasySetupPlugin) : Listener {
             Tool.GAMEMODE -> GamemodeMenu(plugin, p).open()
             Tool.DETECT -> TeamManager.detectWoolAt(plugin, p, s) { Hotbar.render(plugin, p, s) }
             Tool.FACING -> {
-                if (p.isSneaking) FacingControl.reset(s) else if (left) FacingControl.cycleSnap(s) else FacingControl.cycleMode(s)
+                if (p.isSneaking) FacingControl.reset(s) else if (left) FacingControl.cycleSnap(plugin, s) else FacingControl.cycleMode(plugin, s)
                 Hotbar.render(plugin, p, s)
                 Msg.info(p, FacingControl.lines(plugin, s).take(2).joinToString("  ").replace(Regex("&."), ""))
             }
@@ -190,6 +191,7 @@ class ToolListener(private val plugin: EasySetupPlugin) : Listener {
                 "Placed " + (if (team == null) "" else team.display + " ") + el.label +
                     (if (Frame.locksFacing(el)) String.format(" facing %.0f°", oriented.yaw) else "") + "."
             )
+            Guide.hint(plugin, p, s)
         }
     }
 
@@ -226,11 +228,16 @@ class ToolListener(private val plugin: EasySetupPlugin) : Listener {
         if (ghost || victim is ArmorStand) entityHit(d, victim, e)
     }
 
+    /** Right-clicking a marker never trades or deletes: only a punch deletes. Tell the player, once per click. */
     @EventHandler(priority = EventPriority.HIGH)
     fun onInteractEntity(e: PlayerInteractEntityEvent) {
         val ent = e.rightClicked
-        if (plugin.ghosts().isGhost(ent)) e.isCancelled = true // no trading with a ghost
-        if (plugin.ghosts().isGhost(ent) || ent is ArmorStand) entityHit(e.player, ent, e)
+        if (!plugin.ghosts().isGhost(ent)) return
+        e.isCancelled = true
+        val p = e.player
+        if (active(p) != null && debounce(lastEntity, p)) {
+            Msg.info(p, "That is a setup marker. Left-click (punch) it to delete it.")
+        }
     }
 
     private fun entityHit(p: Player, ent: Entity, ev: Cancellable) {
@@ -309,6 +316,9 @@ class ToolListener(private val plugin: EasySetupPlugin) : Listener {
     fun onQuit(e: PlayerQuitEvent) {
         val p = e.player
         val s = plugin.sessions().peek(p)
+        // Stop a half-finished placement first, so the player is not left standing inside a base next login.
+        ActionQueue.abort(p)
+        if (s != null) s.busy = false
         if (s != null && s.toolsActive) Hotbar.deactivate(plugin, p, s)
         plugin.ghosts().removeOwner(p.uniqueId)
         last.remove(p.uniqueId)

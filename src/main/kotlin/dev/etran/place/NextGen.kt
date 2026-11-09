@@ -19,6 +19,10 @@ object NextGen {
     @JvmStatic
     fun run(plugin: EasySetupPlugin, p: Player, type: String?, degrees: Double) {
         val s = plugin.sessions().get(p)
+        if (s.busy) {
+            Msg.err(p, "Another placement is still running - wait a moment.")
+            return
+        }
         if (type != null) {
             val found = GeneratorScanner.findUnplaced(p.world, p.location, type, plugin.settings(), s)
             if (found.isNotEmpty()) {
@@ -33,22 +37,29 @@ object NextGen {
         rotate(plugin, p, degrees)
     }
 
+    private val countdowns = HashMap<java.util.UUID, org.bukkit.scheduler.BukkitTask>()
+
     private fun countdown(plugin: EasySetupPlugin, p: Player, type: String, degrees: Double, start: Location, seconds: Int) {
-        object : BukkitRunnable() {
+        // A second /nextgen replaces the first countdown; two would place the same generator twice.
+        countdowns.remove(p.uniqueId)?.cancel()
+        val task = object : BukkitRunnable() {
             var left = seconds
 
             override fun run() {
                 if (!p.isOnline) {
                     cancel()
+                    countdowns.remove(p.uniqueId)
                     return
                 }
                 if (p.world != start.world || p.location.distance(start) > 0.5) {
                     Msg.err(p, "Movement detected! Setup cancelled.")
                     cancel()
+                    countdowns.remove(p.uniqueId)
                     return
                 }
                 if (--left > 0) return
                 cancel()
+                countdowns.remove(p.uniqueId)
                 val el = if (type == "diamond") Element.GEN_DIAMOND else Element.GEN_EMERALD
                 val s = plugin.sessions().get(p)
                 ElementPlacer.placeHere(plugin, p, s, null, el) {
@@ -57,6 +68,7 @@ object NextGen {
                 }
             }
         }.runTaskTimer(plugin, 20L, 20L)
+        countdowns[p.uniqueId] = task
     }
 
     /** Rotate the player's position and yaw around the map centre by [degrees]. */

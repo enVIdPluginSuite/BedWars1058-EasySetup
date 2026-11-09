@@ -118,10 +118,16 @@ object ElementPlacer {
             if (team == null) return
             val ts = s.team(team)
             ts.placed.add(e)
-            if (e.isGenerator()) ts.gens.add(TeamState.GenRecord(e.genType()!!, loc.clone()))
+            if (e.isGenerator()) {
+                // The same generator typed or placed twice at one spot is still one record.
+                val type = e.genType()!!
+                ts.gens.removeAll { it.type == type && sameWorld(it.loc, loc) && it.loc.distanceSquared(loc) < 0.25 }
+                ts.gens.add(TeamState.GenRecord(type, loc.clone()))
+            }
             else ts.pos[e] = loc.clone()
             if (s.mode != SetupMode.MANUAL) capture(plugin, s, team, e, loc)
         } else if (e.isGenerator()) {
+            s.mapElements[e]?.removeAll { sameWorld(it, loc) && it.distanceSquared(loc) < 0.25 }
             s.addMapGen(e, loc)
         } else {
             s.setMap(e, loc)

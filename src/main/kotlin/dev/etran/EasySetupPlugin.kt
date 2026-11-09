@@ -36,13 +36,14 @@ class EasySetupPlugin : JavaPlugin() {
         server.pluginManager.registerEvents(MenuListener(), this)
         server.pluginManager.registerEvents(ToolListener(this), this)
         registerEntitiesLoad()
+        registerSwapGuard()
         Bukkit.getScheduler().runTask(this, Runnable { ghostsRef.start() })
         server.pluginManager.registerEvents(CommandSniffer(this), this)
 
         bind("bwsetup", SetupCommand(this))
         bind("bwauto", AutoCommand(this))
         bind("nextgen", NextGenCommand(this))
-        logger.info("BedwarsAutoSetup enabled.")
+        logger.info("BedWars1058-EasySetup enabled.")
     }
 
     override fun onDisable() {
@@ -65,6 +66,33 @@ class EasySetupPlugin : JavaPlugin() {
             server.pluginManager.registerEvent(c, object : Listener {}, EventPriority.NORMAL, EventExecutor { _, event ->
                 try {
                     ghostsRef.sweepEntities(get.invoke(event) as Collection<Entity>)
+                } catch (ignored: Throwable) {
+                    // best effort
+                }
+            }, this)
+        } catch (ignored: Throwable) {
+            // not available on this version
+        }
+    }
+
+    /** 1.9+: the swap-hands key would move a tool into the off hand; cancel it by event name so 1.8 is unaffected. */
+    @Suppress("UNCHECKED_CAST")
+    private fun registerSwapGuard() {
+        try {
+            val c = Class.forName("org.bukkit.event.player.PlayerSwapHandItemsEvent") as Class<out Event>
+            val main = c.getMethod("getMainHandItem")
+            val off = c.getMethod("getOffHandItem")
+            val player = c.getMethod("getPlayer")
+            server.pluginManager.registerEvent(c, object : Listener {}, EventPriority.HIGH, EventExecutor { _, event ->
+                try {
+                    val p = player.invoke(event) as org.bukkit.entity.Player
+                    val s = sessionsRef.peek(p)
+                    if (s != null && s.toolsActive &&
+                        (Hotbar.isTool(main.invoke(event) as org.bukkit.inventory.ItemStack?) ||
+                            Hotbar.isTool(off.invoke(event) as org.bukkit.inventory.ItemStack?))
+                    ) {
+                        (event as org.bukkit.event.Cancellable).isCancelled = true
+                    }
                 } catch (ignored: Throwable) {
                     // best effort
                 }

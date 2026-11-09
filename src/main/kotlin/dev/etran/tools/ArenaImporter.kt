@@ -5,6 +5,8 @@ import dev.etran.model.ArenaFormat
 import dev.etran.model.SetupSession
 import dev.etran.model.TeamColor
 import dev.etran.model.TeamState
+import dev.etran.model.Element
+import dev.etran.scan.BedScanner
 import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.World
@@ -49,7 +51,7 @@ object ArenaImporter {
             val ts = s.team(c)
             ts.created = true
             if (e.isGenerator()) {
-                if (ts.gens.any { it.type == e.genType() && it.loc.distance(loc) < 1.0 }) return false
+                if (ts.gens.any { it.type == e.genType() && it.loc.world == loc.world && it.loc.distance(loc) < 1.0 }) return false
                 ts.gens.add(TeamState.GenRecord(e.genType()!!, loc))
                 ts.placed.add(e)
                 return true
@@ -57,11 +59,24 @@ object ArenaImporter {
             if (ts.pos.containsKey(e)) return false // the session already has it
             ts.pos[e] = loc
             ts.placed.add(e)
+            if (e == Element.BED) {
+                // An imported bed must count as assigned, or automatic placement would give its island to another team.
+                try {
+                    val w = loc.world
+                    val b = if (w == null) null else BedScanner.nearest(w, loc, 3)
+                    if (b != null) {
+                        ts.bed = b
+                        s.addAssigned(b)
+                    }
+                } catch (ignored: Throwable) {
+                    // the element is still recorded
+                }
+            }
             return true
         }
         if (e.isGenerator()) {
             val l = s.mapElements[e]
-            if (l != null && l.any { it.distance(loc) < 1.0 }) return false
+            if (l != null && l.any { it.world == loc.world && it.distance(loc) < 1.0 }) return false
             s.addMapGen(e, loc)
             return true
         }

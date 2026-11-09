@@ -96,7 +96,7 @@ class BaseMenu(plugin: EasySetupPlugin, player: Player) : Menu(plugin, player) {
         ) { place(listOf(Element.GEN_IRON, Element.GEN_GOLD, Element.KILL_DROPS)) }
         MainMenu.automationButton(this, 33, plugin, player, session.mode)
         set(38, FacingControl.item(plugin, session)) {
-            FacingControl.click(session, it)
+            FacingControl.click(plugin, session, it)
             refresh()
         }
         set(40, Items.of("BOOK", "&eBase template", templateLore()))

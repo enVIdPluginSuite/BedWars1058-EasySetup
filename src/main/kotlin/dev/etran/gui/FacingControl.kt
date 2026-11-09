@@ -50,13 +50,16 @@ internal object FacingControl {
         )
     }
 
-    fun cycleMode(s: SetupSession) {
-        val cur = s.facingMode ?: Facing.Mode.TOWARD_PLAYER
-        s.facingMode = Facing.Mode.entries[(cur.ordinal + 1) % Facing.Mode.entries.size]
+    fun cycleMode(plugin: EasySetupPlugin, s: SetupSession) {
+        // Cycle from what is actually in effect (config included), so the first click always visibly changes it.
+        val cur = FacingPolicy.mode(plugin.settings(), s)
+        val next = Facing.Mode.entries[(cur.ordinal + 1) % Facing.Mode.entries.size]
+        if (next == Facing.Mode.FIXED && s.facingMode != Facing.Mode.FIXED) s.facingFixed = plugin.settings().shopFixedYaw()
+        s.facingMode = next
     }
 
-    fun cycleSnap(s: SetupSession) {
-        val cur = s.snapOverride ?: 45.0
+    fun cycleSnap(plugin: EasySetupPlugin, s: SetupSession) {
+        val cur = FacingPolicy.step(plugin.settings(), s)
         var idx = 0
         for (i in STEPS.indices) if (Math.abs(STEPS[i] - cur) < 1e-9) idx = i
         s.snapOverride = STEPS[(idx + 1) % STEPS.size]
@@ -68,8 +71,8 @@ internal object FacingControl {
         s.pitchOverride = null
     }
 
-    fun click(s: SetupSession, e: InventoryClickEvent) {
-        if (e.isShiftClick) reset(s) else if (e.isRightClick) cycleSnap(s) else cycleMode(s)
+    fun click(plugin: EasySetupPlugin, s: SetupSession, e: InventoryClickEvent) {
+        if (e.isShiftClick) reset(s) else if (e.isRightClick) cycleSnap(plugin, s) else cycleMode(plugin, s)
     }
 
     private fun trim(d: Double): String =

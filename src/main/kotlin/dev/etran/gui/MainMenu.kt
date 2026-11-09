@@ -81,7 +81,7 @@ class MainMenu(plugin: EasySetupPlugin, player: Player) : Menu(plugin, player) {
             )
         ) { go(TeamMenu(plugin, player)) }
         set(21, FacingControl.item(plugin, session)) {
-            FacingControl.click(session, it)
+            FacingControl.click(plugin, session, it)
             refresh()
         }
         set(

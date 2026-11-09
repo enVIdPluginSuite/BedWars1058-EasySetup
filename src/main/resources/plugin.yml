@@ -10,7 +10,7 @@ depend: [BedWars1058]
 commands:
   bwsetup:
     description: Start hotbar setup mode and open the setup menu.
-    usage: /bwsetup [open|exit|tools|page <team|map>|mode|gamemode|facing|snap|pitch|import|delete|list|status|reset]
+    usage: /bwsetup [open|exit|tools|page <team|map>|mode|gamemode|facing|snap|pitch|import|delete|list|next|help|reload|status|reset]
     aliases: [bwa, bwautosetup]
     permission: bwauto.use
   bwauto:

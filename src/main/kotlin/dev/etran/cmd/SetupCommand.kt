@@ -14,6 +14,7 @@ import dev.etran.place.FacingPolicy
 import dev.etran.place.TeamManager
 import dev.etran.place.Validator
 import dev.etran.tools.ArenaImporter
+import dev.etran.tools.Guide
 import dev.etran.tools.Hotbar
 import org.bukkit.command.Command
 import org.bukkit.command.CommandSender
@@ -65,6 +66,12 @@ class SetupCommand(private val plugin: EasySetupPlugin) : TabExecutor {
                 }
                 Hotbar.enter(plugin, p, s)
                 Hotbar.setPage(plugin, p, s, idx)
+            }
+            "help", "?" -> help(p, label)
+            "next" -> Guide.hint(plugin, p, s)
+            "reload" -> {
+                plugin.reloadConfig()
+                Msg.ok(p, "config.yml reloaded.")
             }
             "delete", "remove" -> delete(p, s, label, args)
             "list" -> {
@@ -131,7 +138,10 @@ class SetupCommand(private val plugin: EasySetupPlugin) : TabExecutor {
                 Msg.info(p, "Mode: " + s.mode.label + ", gamemode: " + (s.gamemode?.label ?: "none"))
                 val missing = Validator.missingAll(s, plugin.settings())
                 if (missing.isEmpty()) Msg.ok(p, "Nothing is missing.")
-                else for (line in missing) Msg.plain(p, " - $line")
+                else {
+                    for (line in missing) Msg.plain(p, " - $line")
+                    Guide.hint(plugin, p, s)
+                }
             }
             "reset" -> {
                 s.reset()
@@ -139,9 +149,26 @@ class SetupCommand(private val plugin: EasySetupPlugin) : TabExecutor {
                 Hotbar.render(plugin, p, s)
                 Msg.ok(p, "Setup state cleared (this does not delete anything inside Bedwars1058).")
             }
-            else -> Msg.err(p, "Usage: /$label [open|exit|tools|page|mode|gamemode|facing|snap|pitch|import|delete|list|status|reset]")
+            else -> {
+                Msg.err(p, "Unknown option '" + args[0] + "'.")
+                help(p, label)
+            }
         }
         return true
+    }
+
+    private fun help(p: Player, label: String) {
+        Msg.info(p, "BedWars1058-EasySetup - quick guide")
+        val lines = listOf(
+            "&e1.&7 Run &f/bw setupArena <world>&7 (or &f/$label&7). The hotbar becomes setup tools.",
+            "&e2.&7 Page 2 of the hotbar (green concrete): nether star = gamemode. Then create the teams (red concrete in the menu).",
+            "&e3.&7 Page 1: pick a team with the wool, then right-click a block with Spawn, Bed, Shop, Upgrade, Iron, Gold.",
+            "&e4.&7 Copy your first base: page 2 arrow = Automation. Page 3 holds the lobby and diamond/emerald tools.",
+            "&e5.&7 Green concrete in the menu validates and saves. Punch a marker to delete it.",
+            "&6Commands:&7 /$label next (what to do now), status, list, delete <element>, page <1|2|3>, mode, gamemode, facing, snap, exit",
+            "&6Also:&7 /bwauto [run|next|confirm|deny|gens], /nextgen [diamond|emerald] [degrees]"
+        )
+        for (l in lines) Msg.plain(p, org.bukkit.ChatColor.translateAlternateColorCodes('&', l))
     }
 
     private fun delete(p: Player, s: SetupSession, label: String, args: Array<String>) {
@@ -218,7 +245,7 @@ class SetupCommand(private val plugin: EasySetupPlugin) : TabExecutor {
     override fun onTabComplete(sender: CommandSender, command: Command, alias: String, args: Array<String>): List<String> {
         fun opts(list: List<String>, typed: String) = list.filter { it.startsWith(typed.lowercase(Locale.ROOT)) }
         if (args.size == 1) {
-            return opts(listOf("open", "exit", "tools", "page", "mode", "gamemode", "facing", "snap", "pitch", "import", "delete", "list", "status", "reset"), args[0])
+            return opts(listOf("open", "exit", "tools", "page", "mode", "gamemode", "facing", "snap", "pitch", "import", "delete", "list", "next", "help", "reload", "status", "reset"), args[0])
         }
         if (args.size == 3 && args[0].lowercase(Locale.ROOT) in listOf("delete", "remove")) {
             val team = TeamColor.entries.map { it.display.lowercase(Locale.ROOT) }

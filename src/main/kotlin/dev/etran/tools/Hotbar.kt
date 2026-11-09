@@ -2,6 +2,7 @@ package dev.etran.tools
 
 import dev.etran.EasySetupPlugin
 import dev.etran.Msg
+import dev.etran.compat.Compat
 import dev.etran.model.SetupSession
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
@@ -97,10 +98,10 @@ object Hotbar {
         val n = Tool.PAGES.size
         s.hotbarPage = ((page % n) + n) % n
         render(plugin, p, s)
-        p.sendActionBarOrChat("Page " + (s.hotbarPage + 1) + "/" + n + ": " + Tool.PAGE_NAMES[s.hotbarPage])
+        val text = "Page " + (s.hotbarPage + 1) + "/" + n + ": " + Tool.PAGE_NAMES[s.hotbarPage]
+        // Action bar where available, so flipping pages does not flood the chat.
+        if (!Compat.actionBar(p, org.bukkit.ChatColor.GOLD.toString() + text)) Msg.info(p, text)
     }
-
-    private fun Player.sendActionBarOrChat(text: String) = Msg.info(this, text)
 
     @JvmStatic
     fun stripTools(p: Player) {

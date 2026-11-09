@@ -93,6 +93,12 @@ object TeamManager {
         q.done {
             s.busy = false
             s.warnedMissingTeam = false
+            if (fewer) {
+                // Every team was deleted and recreated: the first-base template and its markers belong to teams that are gone.
+                s.template.clear()
+                s.assignedBeds.clear()
+            }
+            if (s.toolsActive) plugin.ghosts().refresh(p, s)
             if (s.selected == null || !s.requiredTeams().contains(s.selected)) {
                 s.selected = s.requiredTeams().firstOrNull()
             }

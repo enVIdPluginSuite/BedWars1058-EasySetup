@@ -5,6 +5,7 @@ import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.entity.Player
 import java.util.ArrayDeque
+import java.util.UUID
 
 /**
  * A sequence of actions (teleports, commands, pauses) spread over server ticks, so Bedwars1058 sees each
@@ -17,6 +18,9 @@ class ActionQueue(private val plugin: EasySetupPlugin, private val player: Playe
     private var onDone: Runnable? = null
     private var cancelled = false
     private var finished = false
+
+    /** Where the player stood when the queue started; used to put them back if the queue is aborted. */
+    private var origin: Location? = null
 
     fun then(r: Runnable): ActionQueue {
         steps.add(Step(r, plugin.settings().stepDelay()))
@@ -47,7 +51,12 @@ class ActionQueue(private val plugin: EasySetupPlugin, private val player: Playe
         cancelled = true
     }
 
-    fun start() = next()
+    fun start() {
+        origin = player.location.clone()
+        // A player only ever has one queue moving them around; a stale one would fight this one over teleports.
+        RUNNING.put(player.uniqueId, this)?.let { if (it !== this) it.cancelled = true }
+        next()
+    }
 
     private fun next() {
         if (cancelled || !player.isOnline) {
@@ -70,10 +79,38 @@ class ActionQueue(private val plugin: EasySetupPlugin, private val player: Playe
     private fun finish() {
         if (finished) return
         finished = true
+        if (RUNNING[player.uniqueId] === this) RUNNING.remove(player.uniqueId)
         try {
             onDone?.run()
         } catch (t: Throwable) {
             plugin.logger.warning("Setup completion handler failed: $t")
+        }
+    }
+
+    companion object {
+        private val RUNNING = HashMap<UUID, ActionQueue>()
+
+        /** True while a queue is teleporting [p] around. */
+        @JvmStatic
+        fun isRunning(p: Player): Boolean = RUNNING.containsKey(p.uniqueId)
+
+        /**
+         * Stop the player's running queue (they are leaving) and put them back where it started, so a player who
+         * disconnects mid-placement does not log back in somewhere inside a base.
+         */
+        @JvmStatic
+        fun abort(p: Player) {
+            val q = RUNNING.remove(p.uniqueId) ?: return
+            q.cancelled = true
+            val o = q.origin
+            if (o != null) {
+                try {
+                    p.teleport(o)
+                } catch (ignored: Throwable) {
+                    // best effort while the player is leaving
+                }
+            }
+            q.finish()
         }
     }
 }

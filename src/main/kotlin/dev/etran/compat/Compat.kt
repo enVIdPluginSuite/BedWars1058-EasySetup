@@ -60,6 +60,45 @@ object Compat {
         return null
     }
 
+    private val ACTION_BAR: Method?
+    private val SPIGOT_CLASS: Class<*>?
+    private val TEXT_COMPONENT: java.lang.reflect.Constructor<*>?
+    private val BAR_CONSTANT: Any?
+
+    init {
+        var m: Method? = null
+        var sc: Class<*>? = null
+        var tc: java.lang.reflect.Constructor<*>? = null
+        var bar: Any? = null
+        try {
+            val type = Class.forName("net.md_5.bungee.api.ChatMessageType")
+            val base = Class.forName("net.md_5.bungee.api.chat.BaseComponent")
+            sc = Class.forName("org.bukkit.entity.Player\$Spigot")
+            m = sc.getMethod("sendMessage", type, base)
+            tc = Class.forName("net.md_5.bungee.api.chat.TextComponent").getConstructor(String::class.java)
+            bar = type.getField("ACTION_BAR").get(null)
+        } catch (t: Throwable) {
+            m = null
+        }
+        ACTION_BAR = m
+        SPIGOT_CLASS = sc
+        TEXT_COMPONENT = tc
+        BAR_CONSTANT = bar
+    }
+
+    /** Shows [text] above the hotbar where the server supports it (1.9+ Spigot/Paper); returns false otherwise. */
+    @JvmStatic
+    fun actionBar(p: Player, text: String): Boolean {
+        val m = ACTION_BAR ?: return false
+        return try {
+            val spigot = p.javaClass.getMethod("spigot").invoke(p)
+            m.invoke(spigot, BAR_CONSTANT, TEXT_COMPONENT!!.newInstance(text))
+            true
+        } catch (t: Throwable) {
+            false
+        }
+    }
+
     @JvmStatic
     fun playNo(p: Player) {
         val s = NO_SOUND ?: return

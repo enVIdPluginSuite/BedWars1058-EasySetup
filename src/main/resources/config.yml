@@ -51,7 +51,7 @@ existing-arena:
   import-on-start: true
   folder: Arenas
 
-# Ghost villagers drawn at shops/upgrades while you are in setup mode. Removed on quit, on world save, on
+# Punchable markers (villagers for shops/upgrades, labelled floating blocks for the rest) while you are in setup mode. Removed on quit, on world save, on
 # chunk unload and when setup mode ends.
 ghosts:
   enabled: true

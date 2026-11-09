@@ -113,7 +113,18 @@ enum class Tool(
                 if (this == SHOP || this == UPGRADE) lore.add("&7It looks back toward you, snapped to 45°.")
                 if (this == BED) lore.add("&7Click the bed itself.")
                 lore.add("&7Left-click an element to delete it.")
-                if (element != null && element.perTeam && team != null) lore.add("&7Placing for: " + team.chat + team.display)
+                if (element != null && s != null) {
+                    if (element.perTeam) {
+                        if (team != null) {
+                            lore.add("&7Placing for: " + team.chat + team.display)
+                            val n = if (element.isGenerator()) s.team(team).gens.count { it.type == element.genType() } else if (s.teamPlaced(team, element)) 1 else 0
+                            lore.add(if (n > 0) "&a✔ Placed" + (if (n > 1) " ($n)" else "") + " for " + team.display else "&c✘ Not placed for " + team.display + " yet")
+                        }
+                    } else {
+                        val n = s.mapCount(element)
+                        lore.add(if (n > 0) "&a✔ Placed" + (if (n > 1) " ($n)" else "") else "&c✘ Not placed yet")
+                    }
+                }
             }
         }
         lore.add("&0$MARKER$id")

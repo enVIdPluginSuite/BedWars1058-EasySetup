@@ -56,7 +56,7 @@ object LobbyDetector {
         val width = 2 * r + 1
         val height = maxY - minY
         val total = width.toLong() * width * height
-        if (total > 60_000_000L) return null
+        if (total > 20_000_000L) return null
         val n = total.toInt()
         val solid = BitSet(n)
         val bed = BitSet(n)

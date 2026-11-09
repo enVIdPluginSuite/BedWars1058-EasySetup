@@ -28,6 +28,9 @@ import java.util.UUID
 class Ghosts(private val plugin: EasySetupPlugin) {
     internal class Entry(val owner: UUID, val element: Element, val team: TeamColor?, val anchor: Location) {
         var entity: Entity? = null
+
+        /** Spawns that another plugin cancelled (or that failed) in a row; after a few we stop retrying. */
+        var failures = 0
     }
 
     private val byOwner = HashMap<UUID, MutableList<Entry>>()
@@ -54,6 +57,7 @@ class Ghosts(private val plugin: EasySetupPlugin) {
      * hitboxes to punch when deleting.
      */
     fun refresh(p: Player, s: SetupSession) {
+        if (s.toolsActive) Hotbar.render(plugin, p, s) // keep the placed / not placed marks on the tools current
         removeOwner(p.uniqueId)
         if (!plugin.settings().ghostsEnabled() || !s.toolsActive) return
         for ((color, ts) in s.teams) {
@@ -114,21 +118,37 @@ class Ghosts(private val plugin: EasySetupPlugin) {
                 st.equipment?.helmet = Items.create(icon(en))
                 st
             }
+            if (!ent.isValid) {
+                // Another plugin (region protection, mob limits...) cancelled the spawn.
+                failed(en)
+                return
+            }
             ent.customName = TAG + label(en)
             ent.isCustomNameVisible = true
             ent.removeWhenFarAway = false
             val ai = call(ent, "setAI", arrayOf(java.lang.Boolean.TYPE), false)
             call(ent, "setSilent", arrayOf(java.lang.Boolean.TYPE), true)
-            call(ent, "setInvulnerable", arrayOf(java.lang.Boolean.TYPE), true)
             call(ent, "setCollidable", arrayOf(java.lang.Boolean.TYPE), false)
             call(ent, "setPersistent", arrayOf(java.lang.Boolean.TYPE), false)
             if (villager && !ai) immobilise(ent as Villager) // 1.8: no AI switch
             ent.teleport(l)
             call(ent, "setRotation", arrayOf(java.lang.Float.TYPE, java.lang.Float.TYPE), l.yaw, l.pitch)
             en.entity = ent
+            en.failures = 0
             byEntity[ent.uniqueId] = en
         } catch (t: Throwable) {
-            plugin.logger.warning("Could not spawn a setup marker: $t")
+            if (en.failures == 0) plugin.logger.warning("Could not spawn a setup marker: $t")
+            failed(en)
+        }
+    }
+
+    private fun failed(en: Entry) {
+        en.failures++
+        if (en.failures == MAX_FAILURES) {
+            plugin.logger.warning(
+                "A setup marker for ${en.element.label} at ${en.anchor.blockX}, ${en.anchor.blockY}, ${en.anchor.blockZ} " +
+                    "could not be spawned (another plugin may block entity spawns there); giving up on it."
+            )
         }
     }
 
@@ -181,7 +201,7 @@ class Ghosts(private val plugin: EasySetupPlugin) {
         rebuildQueued = true
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {
             rebuildQueued = false
-            for (list in byOwner.values) for (en in list) if (en.entity == null) materialise(en)
+            for (list in byOwner.values) for (en in list) if (en.entity == null && en.failures < MAX_FAILURES) materialise(en)
         }, 10L)
     }
 
@@ -209,21 +229,26 @@ class Ghosts(private val plugin: EasySetupPlugin) {
         for (list in byOwner.values) {
             for (en in list) {
                 val e = en.entity
-                if (e != null && e.location.chunk == c) dispose(en)
+                if (e == null) continue
+                val l = e.location
+                // Compare coordinates: chunk objects are not guaranteed to be equal-comparable across versions.
+                if (l.world == c.world && (l.blockX shr 4) == c.x && (l.blockZ shr 4) == c.z) dispose(en)
             }
         }
         sweepEntities(c.entities.toList())
     }
 
     private fun keep() {
+        // While a world save is in progress the markers are meant to be gone; the rebuild task brings them back.
+        if (rebuildQueued) return
         for (list in byOwner.values) {
             for (en in list) {
                 val e = en.entity
                 if (e == null || !e.isValid) {
                     if (e != null) byEntity.remove(e.uniqueId)
                     en.entity = null
-                    materialise(en)
-                } else if (e.location.distanceSquared(en.anchor) > 0.09) {
+                    if (en.failures < MAX_FAILURES) materialise(en)
+                } else if (e.world != en.anchor.world || e.location.distanceSquared(en.anchor) > 0.09) {
                     e.teleport(en.anchor)
                 }
             }
@@ -233,6 +258,8 @@ class Ghosts(private val plugin: EasySetupPlugin) {
     companion object {
         /** Invisible prefix on every ghost's name; how leftovers are recognised. */
         internal const val TAG = "§r§b§w§a§g"
+
+        private const val MAX_FAILURES = 3
 
         /** True for any marker entity this plugin spawned (recognised by its hidden name prefix). */
         @JvmStatic
